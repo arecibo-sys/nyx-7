@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#07090c" />
+<title>NYX-7 — Electric Grand Touring Coupé</title>
+<meta name="description" content="Real-time 3D configurator for the NYX-7 electric grand touring crossover coupé. Procedural geometry, generative ambient score." />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230b0e12'/><path d='M6 20h20M9 20a3 3 0 106 0 3 3 0 10-6 0M17 20a3 3 0 106 0 3 3 0 10-6 0' stroke='%2340e0d0' stroke-width='1.6' fill='none'/></svg>" />
+<link rel="stylesheet" href="./styles.css" />
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+
+<canvas id="stage"></canvas>
+
+<!-- ── BOOT / ENTRY ─────────────────────────────────────────────── -->
+<div id="boot" class="boot">
+  <div class="boot__inner">
+    <div class="boot__mark">
+      <span class="boot__glyph">N</span>
+      <div class="boot__title">
+        <h1>NYX&#8209;7</h1>
+        <p>Electric Grand Touring Coupé</p>
+      </div>
+    </div>
+
+    <div class="boot__bar"><i id="bootFill"></i></div>
+    <p class="boot__status" id="bootStatus">Compiling geometry…</p>
+
+    <button id="bootEnter" class="btn btn--primary btn--enter" disabled>
+      <span>Enter</span>
+      <small>with ambient score</small>
+    </button>
+    <button id="bootSilent" class="btn btn--ghost btn--silent" disabled>Enter silently</button>
+
+    <p class="boot__legal">Procedural real&#8209;time render · no external assets · drag to orbit</p>
+  </div>
+</div>
+
+<!-- ── HUD ──────────────────────────────────────────────────────── -->
+<header class="hud hud--top">
+  <div class="brand">
+    <span class="brand__glyph">N</span>
+    <span class="brand__text"><b>NYX&#8209;7</b><i>Grand Touring Coupé</i></span>
+  </div>
+
+  <div class="hud__actions">
+    <button id="btnSound" class="icon-btn is-on" aria-pressed="true" title="Ambient score">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path class="wave" d="M16 8.5a5 5 0 010 7M19 5.5a9 9 0 010 13"/><path d="M4 9.5h3l4.5-3.5v12L7 14.5H4z"/></svg>
+    </button>
+    <button id="btnSpecs" class="icon-btn" aria-pressed="false" title="Specifications">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+    </button>
+    <button id="btnFull" class="icon-btn" title="Fullscreen">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 15v5h-5M20 9V4h-5M4 15v5h5"/></svg>
+    </button>
+  </div>
+</header>
+
+<!-- ── SPEC SHEET ───────────────────────────────────────────────── -->
+<aside class="specs" id="specs" aria-hidden="true">
+  <div class="specs__head">
+    <h2>Specification</h2>
+    <button id="specsClose" class="icon-btn icon-btn--sm" title="Close">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+  </div>
+
+  <div class="specs__scroll">
+    <section>
+      <h3>Powertrain</h3>
+      <dl>
+        <div><dt>Architecture</dt><dd>800 V · SiC inverters</dd></div>
+        <div><dt>Motors</dt><dd>Dual PMSM · 190 kW F / 320 kW R</dd></div>
+        <div><dt>Output</dt><dd>510 kW · 890 N·m</dd></div>
+        <div><dt>Battery</dt><dd>108 kWh structural · 4,896 cells</dd></div>
+        <div><dt>DC peak</dt><dd>350 kW · 10–80% in 17 min</dd></div>
+        <div><dt>0–100 km/h</dt><dd>2.9 s</dd></div>
+      </dl>
+    </section>
+
+    <section>
+      <h3>Dimensions</h3>
+      <dl>
+        <div><dt>Length</dt><dd>4,940 mm</dd></div>
+        <div><dt>Width</dt><dd>1,995 mm</dd></div>
+        <div><dt>Height</dt><dd>1,480 mm</dd></div>
+        <div><dt>Wheelbase</dt><dd>3,020 mm</dd></div>
+        <div><dt>Track F / R</dt><dd>1,690 / 1,705 mm</dd></div>
+        <div><dt>Clearance</dt><dd>128 mm</dd></div>
+        <div><dt>Drag</dt><dd>0.198 C<sub>d</sub></dd></div>
+      </dl>
+    </section>
+
+    <section>
+      <h3>Chassis</h3>
+      <dl>
+        <div><dt>Wheels</dt><dd>22" forged · 9.5J / 10.5J</dd></div>
+        <div><dt>Tyres</dt><dd>265/40 · 295/35 R22</dd></div>
+        <div><dt>Brakes</dt><dd>Carbon-ceramic 400 / 380 mm</dd></div>
+        <div><dt>Suspension</dt><dd>Adaptive air · CVD damping</dd></div>
+      </dl>
+    </section>
+
+    <section>
+      <h3>Render</h3>
+      <dl>
+        <div><dt>Geometry</dt><dd id="specTris">—</dd></div>
+        <div><dt>Quality</dt><dd id="specQuality">—</dd></div>
+        <div><dt>Frame</dt><dd id="specFps">—</dd></div>
+      </dl>
+    </section>
+  </div>
+</aside>
+
+<!-- ── CONTROL DOCK ─────────────────────────────────────────────── -->
+<footer class="dock" id="dock">
+  <button class="dock__grip" id="dockGrip" aria-label="Toggle controls"><i></i></button>
+
+  <div class="dock__body">
+    <div class="row row--paint">
+      <span class="row__label">Finish</span>
+      <div class="swatches" id="swatches"></div>
+      <span class="paint-name" id="paintName">Obsidian Teal</span>
+    </div>
+
+    <div class="row row--views">
+      <span class="row__label">View</span>
+      <div class="segmented" id="views"></div>
+    </div>
+
+    <div class="row row--toggles">
+      <button class="chip is-on" data-toggle="lights">Lighting signature</button>
+      <button class="chip" data-toggle="spoiler">Spoiler deploy</button>
+      <button class="chip is-on" data-toggle="orbit">Auto orbit</button>
+      <button class="chip is-on" data-toggle="floor">Studio floor</button>
+    </div>
+
+    <div class="row row--audio">
+      <span class="row__label">Score</span>
+      <input id="vol" class="slider" type="range" min="0" max="100" value="55" aria-label="Ambient volume" />
+      <span class="vol-read" id="volRead">55</span>
+    </div>
+  </div>
+</footer>
+
+<div class="hint" id="hint">Drag to orbit · pinch or scroll to zoom</div>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
