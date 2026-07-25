@@ -547,16 +547,17 @@ export function buildCar(M, quality = 'high') {
   car.add(spoiler);
   refs.spoiler = spoiler;
 
-  // Diffuser
-  const diff = new THREE.Mesh(roundedBox(1.48, 0.26, 0.36, 0.015), M.carbon);
-  diff.rotation.y = Math.PI / 2;
+  // Diffuser. Built on the car's own axes: with a Y rotation in play a Z
+  // rotation would roll the plate about the long axis instead of sweeping it
+  // up, so the depth runs along X and the 1.36 m span along Z directly.
+  const diff = new THREE.Mesh(roundedBox(0.44, 0.090, 1.36, 0.014), M.carbon);
   diff.rotation.z = -0.200;
-  diff.position.set(-2.312, 0.352, 0);
+  diff.position.set(-2.258, 0.316, 0);
   car.add(diff);
   for (let i = 0; i < 5; i++) {
-    const fence = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.105, 0.016), M.carbon);
+    const fence = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.100, 0.016), M.carbon);
     fence.rotation.z = -0.200;
-    fence.position.set(-2.318, 0.330, -0.54 + i * 0.27);
+    fence.position.set(-2.268, 0.266, -0.52 + i * 0.26);
     car.add(fence);
   }
   for (const side of [1, -1]) {
