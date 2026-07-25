@@ -20,7 +20,7 @@ let QUALITY =
   (!touch) ? 'high' :
   (cores >= 6 && mem >= 4 && !small) ? 'medium' : 'low';
 
-const DPR_CAP = { ultra: 2, high: 2, medium: 1.9, low: 1.5 }[QUALITY];
+const DPR_CAP = { ultra: 2, high: 2, medium: 1.5, low: 1.25 }[QUALITY];
 const USE_BLOOM = QUALITY !== 'low';
 const SHADOW_SIZE = { ultra: 2048, high: 2048, medium: 1024, low: 512 }[QUALITY];
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -36,6 +36,10 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 0.80;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = QUALITY === 'low' ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
+// The car is static and only the camera orbits, so the shadow map does not need
+// re-rendering every frame. It is refreshed explicitly when the spoiler moves.
+renderer.shadowMap.autoUpdate = false;
+renderer.shadowMap.needsUpdate = true;
 
 const scene = new THREE.Scene();
 scene.fog = new THREE.Fog(0x07090c, 9, 34);
@@ -184,15 +188,18 @@ scene.add(blob);
 /* ══ controls ════════════════════════════════════════════════════ */
 const controls = new OrbitControls(camera, canvas);
 controls.enableDamping = true;
-controls.dampingFactor = 0.055;
 controls.minDistance = 3.4;
-controls.maxDistance = 17;
+controls.maxDistance = 26;
 controls.minPolarAngle = 0.18;
 controls.maxPolarAngle = Math.PI / 2 - 0.035;
 controls.enablePan = false;
-controls.rotateSpeed = 0.7;
-controls.zoomSpeed = 0.85;
 controls.autoRotateSpeed = 0.42;
+// Touch wants a more direct response than a mouse: a finger expects the model
+// to track it, so less smoothing and close to 1:1 travel.
+const BASE_DAMPING = touch ? 0.115 : 0.055;
+controls.dampingFactor = BASE_DAMPING;
+controls.rotateSpeed = touch ? 0.95 : 0.70;
+controls.zoomSpeed = touch ? 1.05 : 0.85;
 
 /* ══ views ═══════════════════════════════════════════════════════ */
 // Targets sit low so the car composes in the upper two-thirds, clear of the dock.
@@ -204,10 +211,17 @@ const VIEWS = [
   { name: 'Above',   pos: [ 2.60, 6.10, 3.10], tgt: [ 0.00, 0.40, 0] },
 ];
 
-/* The dock overlays the lower edge, so short viewports need extra room. */
+/* Framing is solved rather than tabulated: on a narrow column the horizontal
+   field of view is the binding constraint, and stepped magic numbers let the
+   car overflow the sides. Work out the distance at which the vehicle spans the
+   frame width, then add a little for the dock on short viewports. */
+const FIT_RADIUS = 2.80;      // half-length of the car plus a margin
+const REF_DISTANCE = 7.15;    // distance baked into the view presets
+
 function fitScale() {
-  const a = innerWidth / innerHeight;
-  let k = a >= 1.7 ? 1.00 : a >= 1.2 ? 1.14 : a >= 0.85 ? 1.32 : 1.62;
+  const vHalf = THREE.MathUtils.degToRad(camera.fov) / 2;
+  const hHalf = Math.atan(Math.tan(vHalf) * (innerWidth / innerHeight));
+  let k = Math.max(1, (FIT_RADIUS / Math.tan(hHalf)) / REF_DISTANCE);
   if (innerHeight < 780) k *= 1 + (780 - innerHeight) / 1450;
   return k;
 }
@@ -218,8 +232,20 @@ let currentView = 0;
 function applyView(i, instant = false) {
   currentView = i;
   const v = VIEWS[i], k = fitScale();
-  const toP = new THREE.Vector3(v.pos[0] * k, v.pos[1] * (1 + (k - 1) * 0.45), v.pos[2] * k);
+  const toP = new THREE.Vector3(v.pos[0] * k, v.pos[1] * (1 + (k - 1) * 0.55), v.pos[2] * k);
   const toT = new THREE.Vector3(...v.tgt);
+
+  // Aim below the car by roughly the share of the viewport the dock covers, so
+  // the vehicle composes in the clear area rather than behind the controls.
+  const dist = toP.distanceTo(toT);
+  const visibleH = 2 * dist * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);
+  const dockH = dock ? dock.getBoundingClientRect().height : 0;
+  toT.y -= Math.min(1.20, (dockH / innerHeight) * visibleH * 0.35);
+
+  // A lowered aim point would otherwise let the orbit dip under the floor.
+  controls.maxPolarAngle = Math.min(
+    Math.PI / 2 - 0.035,
+    Math.acos(THREE.MathUtils.clamp((0.30 - toT.y) / dist, -1, 1)));
   if (instant || reduceMotion) {
     camera.position.copy(toP);
     controls.target.copy(toT);
@@ -334,6 +360,15 @@ VIEWS.forEach((v, i) => {
 
 // toggles
 const state = { lights: true, spoiler: false, orbit: !reduceMotion, floor: true };
+const narrow = matchMedia('(max-width: 620px)');
+function applyChipLabels() {
+  document.querySelectorAll('[data-toggle][data-short]').forEach(b => {
+    if (!b.dataset.long) b.dataset.long = b.textContent.trim();
+    b.textContent = narrow.matches ? b.dataset.short : b.dataset.long;
+  });
+}
+applyChipLabels();
+narrow.addEventListener('change', applyChipLabels);
 document.querySelectorAll('[data-toggle]').forEach(btn => {
   const k = btn.dataset.toggle;
   btn.classList.toggle('is-on', state[k]);
@@ -440,6 +475,7 @@ function onResize() {
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     renderer.setSize(w, h);
+    renderer.shadowMap.needsUpdate = true;
     if (composer) { composer.setSize(w, h); bloomPass.resolution.set(w, h); }
     applyView(currentView, true);
   });
@@ -450,7 +486,7 @@ addEventListener('orientationchange', () => setTimeout(onResize, 220), { passive
 /* ══ loop ════════════════════════════════════════════════════════ */
 const clock = new THREE.Clock();
 const fpsEl = document.getElementById('specFps');
-let acc = 0, frames = 0, degraded = false;
+let acc = 0, frames = 0, degraded = 0;
 
 const easeInOut = (t) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 
@@ -467,8 +503,9 @@ function tick() {
   }
 
   if (REFS) {
-    // spoiler deploy
+    // spoiler deploy — refresh the shadow map only while it is actually moving
     const target = state.spoiler ? -0.385 : 0;
+    if (Math.abs(target - REFS.spoiler.rotation.z) > 1e-4) renderer.shadowMap.needsUpdate = true;
     REFS.spoiler.rotation.z += (target - REFS.spoiler.rotation.z) * Math.min(1, dt * 5.5);
     REFS.spoiler.position.y += (((state.spoiler ? 1.062 : 1.006)) - REFS.spoiler.position.y) * Math.min(1, dt * 5.5);
 
@@ -480,7 +517,11 @@ function tick() {
     }
   }
 
-  controls.update();
+  // Damping is applied per frame, so a phone running at 40 fps would otherwise
+  // feel heavier than a desktop at 120. Rescale it against the real delta.
+  controls.dampingFactor = THREE.MathUtils.clamp(
+    1 - Math.pow(1 - BASE_DAMPING, dt * 60), 0.02, 0.5);
+  controls.update(dt);
   if (composer) composer.render(); else renderer.render(scene, camera);
 
   // adaptive resolution
@@ -488,11 +529,12 @@ function tick() {
   if (acc >= 1) {
     const fps = frames / acc;
     if (fpsEl) fpsEl.textContent = `${Math.round(fps)} fps`;
-    if (!degraded && fps < 34) {
-      degraded = true;
-      const pr = Math.max(1, renderer.getPixelRatio() * 0.75);
+    if (degraded < 2 && fps < 40) {
+      degraded++;
+      const pr = Math.max(0.85, renderer.getPixelRatio() * 0.78);
       renderer.setPixelRatio(pr);
       if (composer) composer.setPixelRatio(pr);
+      renderer.shadowMap.needsUpdate = true;
       document.getElementById('specQuality').textContent = `${QUALITY} · ${pr.toFixed(2)}× DPR (adaptive)`;
     }
     acc = 0; frames = 0;

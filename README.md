@@ -58,10 +58,22 @@ Audio starts only on the entry click, as browsers require.
 
 The renderer profiles the device on load (pointer type, core count, memory, viewport) and picks one
 of four tiers, which sets loft resolution, texture sizes, shadow map size, pixel‑ratio cap,
-antialiasing and whether the bloom pass runs at all. Camera framing compensates for both aspect
-ratio and viewport height so the car always composes clear of the control dock — phone portrait,
-iPad in either orientation, and desktop. If the frame rate drops below 34 fps the pixel ratio steps
-down once, automatically. `prefers-reduced-motion` disables auto‑orbit and camera easing.
+antialiasing and whether the bloom pass runs at all.
+
+Framing is solved rather than tabulated: on a narrow column the *horizontal* field of view is the
+binding constraint, so the camera distance is derived from it, then the aim point is dropped by the
+share of the viewport the dock covers — the car composes in the clear area on phone portrait, iPad
+in either orientation and desktop alike, with the orbit's polar limit re‑derived so the lowered aim
+can't swing the camera under the floor.
+
+Touch gets its own handling: less damping and near 1:1 travel, since a finger expects the model to
+track it rather than glide. Damping is rescaled against the real frame delta so a phone at 40 fps
+doesn't feel heavier than a desktop at 120. The shadow map is rendered once and then frozen — the
+car is static and only the camera orbits — and the mobile dock drops its `backdrop-filter`, because
+blurring a live WebGL canvas every frame costs more than the frosted glass is worth. If the frame
+rate falls below 40 fps the pixel ratio steps down, up to twice.
+
+`prefers-reduced-motion` disables auto‑orbit and camera easing.
 
 ## Running locally
 
